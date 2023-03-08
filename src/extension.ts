@@ -10,15 +10,15 @@ const QUOTES = '\'\"';
 
 const DOCUMENT_SELECTOR = ['markdown', 'latex'];
 
-let wordCompletionItems: any[] = [], wordItems: any = [];
+var wordCompletionItems: any[] = [], wordItems: any[] = [];
 
 function loadHintData(){
-	var wordCompletionItems = [];
-	var wordItems = require(HINT_DATA_FILES.WORD);
+	wordCompletionItems = [];
+	wordItems = require(HINT_DATA_FILES.WORD);
 	// window.alert(len(wordItems));
 	// console.log(wordItems.length);
 	wordItems.forEach((word: any)  => {
-		let item = new vscode.CompletionItem(word.name, vscode.CompletionItemKind.Function);
+		let item = new vscode.CompletionItem(word.name, vscode.CompletionItemKind.Text);
 		item.documentation = word.desc;
 		item.detail = word.set;
 		// TODO
@@ -32,6 +32,11 @@ function getTextBeforeCursor(document: vscode.TextDocument, position: vscode.Pos
 	let start = new vscode.Position(position.line, 0);
 	var range = new vscode.Range(start, position);
 	return document.getText(range);
+}
+
+function getTextBeforequestion(document: vscode.TextDocument, position: vscode.Position){
+	const beforeText = document.lineAt(position.line).text.substr(0, position.character-1);
+	return beforeText;
 }
 
 function isCursorInTheString(textBeforeCursor: string) {
@@ -50,9 +55,19 @@ function isCursorInTheString(textBeforeCursor: string) {
 	return inStr;
 }
 
-function searchHintCompletionItems(keyword: string) {
+function searchHintEnglishCompletionItems(englishkeyword: string) {
 	// console.log(keyword)
-	return wordCompletionItems.filter(it => it.label.startsWith(keyword));
+	if (englishkeyword) {return wordCompletionItems.filter(it => it.label.startsWith(englishkeyword));}
+	else return []
+}
+
+function searchHintChineseCompletionItems(chineseKeyword: string) {
+	// console.log(keyword)
+	if (chineseKeyword) {
+		let completionList = wordCompletionItems.filter(it => it.detail.indexOf(chineseKeyword) != -1);
+		return completionList
+	}
+	else return []
 }
 
 function getTextAroundCursor(document: vscode.TextDocument, position: vscode.Position) {
@@ -87,6 +102,28 @@ export function activate(context: vscode.ExtensionContext) {
 	const englishProvider = vscode.languages.registerCompletionItemProvider(
 		DOCUMENT_SELECTOR, {
 			provideCompletionItems: function(document, position, token, context){
+				const char = document.lineAt(position.line).text.substr(position.character-1,position.character);
+				if(char == '?' || char =='?'){
+					let beforeText = getTextBeforequestion(document, position);
+					let chineseKeyword = (beforeText.match(/[\u4E00-\u9FA5]+$/) || [''] )[0];
+					let items = searchHintChineseCompletionItems(chineseKeyword);
+					let replaceRange = new vscode.Range(position.line, 
+														position.character - chineseKeyword.length - 1, 
+														position.line, 
+														position.character);
+					let completionList: vscode.CompletionItem[] = []
+					items.forEach((word: any) => {
+						let item = new vscode.CompletionItem(word.name, vscode.CompletionItemKind.Function);
+						item.documentation = word.documentation;
+						item.detail = word.detail;
+						item.label = word.label;
+						item.additionalTextEdits = [vscode.TextEdit.delete(replaceRange)];
+						completionList.push(item);
+					});
+					return new vscode.CompletionList(completionList);
+				}
+				
+
 				let beforeText = getTextBeforeCursor(document, position);
 				// console.log(beforeText)
 				if (isCursorInTheString(beforeText)) {return []}
@@ -94,18 +131,20 @@ export function activate(context: vscode.ExtensionContext) {
 				// \b 匹配一个单词边界，即字与空格间的位置。
 				// ? 匹配前面的子表达式零次或一次。
 				// keyword 是匹配光标之前的字符串
-				let keyword = (beforeText.match(/^.*?\b(\w*)$/) || ['', ''])[1];
+				let englishKeyword = (beforeText.match(/^.*?\b(\w*)$/) || ['', ''])[1];
+				
 				// console.log(keyword)
-				if (!keyword) {return wordCompletionItems};
+				// if (!englishKeyword) {return wordCompletionItems};
+				// if (!chineseKeyword) {return wordCompletionItems};
 				// keyword = beforeText;
-				let items = searchHintCompletionItems(keyword);
+				let items = searchHintEnglishCompletionItems(englishKeyword);
 				// 大写开头的单词不能不全，转成小写搜索一遍
-				if (items.length == 0) {
-					items = searchHintCompletionItems(keyword.toLowerCase());
+				if (items.length == 0 && englishKeyword != '') {
+					items = searchHintEnglishCompletionItems(englishKeyword.toLowerCase());
 				} 
-				return items;
+				return new vscode.CompletionList(items, false) ;
 			}
-		}
+		}, "?"
 		
 	);
 
@@ -141,9 +180,23 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 
+	// Use the console to output diagnostic information (console.log) and errors (console.error)
+	// This line of code will only be executed once when your extension is activated
+	console.log('Congratulations, your extension "hello-extension" is now active!');
+	console.log('====================================================');
+	// The command has been defined in the package.json file
+	// Now provide the implementation of the command with registerCommand
+	// The commandId parameter must match the command field in package.json
+	let disposable = vscode.commands.registerCommand('words-hint.hello', () => {
+		// The code you place here will be executed every time your command is executed
+		// Display a message box to the user
+		vscode.window.showInformationMessage('Hello World from words-hint!');
+	});
+
 
 	subscriptions.push(englishProvider);
 	subscriptions.push(hoverInformationProvider);
+	subscriptions.push(disposable);
 }
 
 // This method is called when your extension is deactivated

@@ -9,13 +9,16 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:latex",
+    "onLanguage:markdown"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "words-hint.helloWorld",
-        "title": "Hello World"
+        "command": "words-hint.hello",
+        "title": "Hello words hint"
       }
     ]
   },
